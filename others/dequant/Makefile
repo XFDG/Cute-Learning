@@ -1,2 +1,5 @@
-default:
-	nvcc -o dequant dequant.cu -O2 -arch=sm_80 -std=c++17 -I../flashdecoding/src/cutlass/include -I../flashdecoding/src/cutlass/tools/util/include --expt-relaxed-constexpr -cudart shared --cudadevrt none
+TARGET := dequant
+SRC := dequant.cu
+NEEDS_CUTLASS := 1
+
+include ../../common.mk

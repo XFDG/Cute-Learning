@@ -1,6 +1,8 @@
-default:
-	nvcc -o gemm gemm.cu -O2 -arch=compute_90a -code=sm_90a -std=c++17 \
-	-I/home/zhichen/dayou/cutlass/include \
-	-I/home/zhichen/dayou/cutlass/tools/util/include \
-	--expt-relaxed-constexpr -cudart shared --cudadevrt none \
-	&& CUDA_VISIBLE_DEVICES=3 ./gemm
+TARGET := gemm
+SRC := gemm.cu
+NEEDS_CUTLASS := 1
+GPU_ARCH := 90a
+ARCH_FLAGS := -arch=compute_90a -code=sm_90a
+RUN_REQUIRES_ARCH := 90a
+
+include ../../../common.mk
