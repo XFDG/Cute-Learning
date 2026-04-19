@@ -1,15 +1,5 @@
 # CuTe 环境配置记录
 
-## 这次修正了什么
-
-前一版说明错误地写到了 `LLMQRT` 目录下，这不对。
-
-你真正要用来学 CuTe 和写 matmul 的仓库是：
-
-- `/home/ai/workspace/Cute-Learning`
-
-所以这份文档改为基于 `Cute-Learning` 自己的目录结构来写。
-
 ## 先说结论
 
 `Cute-Learning` 本身已经有一套可用的构建方式，不需要像完整 CUTLASS 仓库那样单独跑一遍大 CMake。
