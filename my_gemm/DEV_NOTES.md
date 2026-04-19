@@ -1,5 +1,13 @@
 # my_gemm 开发记录
 
+## 仓库信息
+
+- 我的 fork 仓库：https://github.com/XFDG/Cute-Learning
+- 上游仓库：https://github.com/DD-DuDa/Cute-Learning
+- 当前开发分支：`feat/my-gemm-baseline`
+- 当前开发目录：`/home/ai/workspace/Cute-Learning/my_gemm`
+- 当前已推送提交：`c31c93a`
+
 ## 目的
 
 这个目录的目标不是直接写出最终最强版本，而是先做一个我们能完全看懂、能稳定调试、能逐步演进的 CuTe GEMM 实验目录。

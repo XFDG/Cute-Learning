@@ -1,5 +1,13 @@
 # CuTe GEMM 实验报告
 
+## 仓库信息
+
+- 我的 fork 仓库：https://github.com/XFDG/Cute-Learning
+- 上游仓库：https://github.com/DD-DuDa/Cute-Learning
+- 当前开发分支：`feat/my-gemm-baseline`
+- 当前开发目录：`/home/ai/workspace/Cute-Learning/my_gemm`
+- 当前已推送提交：`c31c93a`
+
 日期：`2026-04-19`
 
 ## 1. 实验目的
@@ -322,7 +330,7 @@ Performance: M=2048 N=2048 K=2048 Time = 0.001734 s, GFLOPS = 9225.78
 4. `partition_fragment_*()` 负责“给线程分配寄存器片段”。
 5. `cute::copy()` 和 `cute::gemm()` 负责“主循环里的搬运与计算”。
 
-## 9. 下一步建议
+## 9. 未来计划
 
 下一步更适合做下面这些事情：
 
