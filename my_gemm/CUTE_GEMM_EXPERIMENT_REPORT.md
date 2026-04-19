@@ -1,5 +1,16 @@
 # CuTe GEMM 实验报告
 
+## 开发环境
+
+- 操作系统：`Linux 6.6.87.2-microsoft-standard-WSL2 x86_64 GNU/Linux`
+- GPU：`NVIDIA GeForce RTX 5060 Laptop GPU`
+- NVIDIA Driver：`591.74`
+- CUDA Toolkit：`13.1`
+- `nvcc` 版本：`V13.1.115`
+- 当前目标架构：`sm_120`
+- 当前构建目标：`TARGET=gemm`，`SRC=gemm.cu`
+- CUTLASS 路径：`/home/ai/workspace/Cute-Learning/flashdecoding/src/cutlass`
+
 ## 仓库信息
 
 - 我的 fork 仓库：https://github.com/XFDG/Cute-Learning
