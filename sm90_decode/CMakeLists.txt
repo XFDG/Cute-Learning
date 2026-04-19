@@ -5,7 +5,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_ARCHITECTURES 80)
 
-set(INCLUDE_DIR ${PROJECT_SOURCE_DIR}/src/cutlass/include)
+set(CUTLASS_DIR ${PROJECT_SOURCE_DIR}/../flashdecoding/src/cutlass)
+set(INCLUDE_DIR ${CUTLASS_DIR}/include)
+
+if(NOT EXISTS ${INCLUDE_DIR}/cute/tensor.hpp)
+  message(FATAL_ERROR
+    "Repo-local CUTLASS not found at ${CUTLASS_DIR}. "
+    "Run 'git submodule update --init --recursive flashdecoding/src/cutlass' from the Cute-Learning repository.")
+endif()
 
 find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")

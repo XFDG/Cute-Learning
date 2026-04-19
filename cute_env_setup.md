@@ -40,28 +40,23 @@ make run
 
 - `common.mk`
 
-它会按顺序尝试这些候选路径：
+现在已经统一固定为仓库内这一份：
 
-1. `../LLMQRT/runtime_refact/3rdparty/cutlass`
-2. `../LLMQRT_bak/runtime_refact/3rdparty/cutlass`
-3. `flashdecoding/src/cutlass`
-4. `sm90_decode/src/cutlass`
+1. `flashdecoding/src/cutlass`
 
-只要其中某个目录里存在：
+它要求这个目录里存在：
 
 ```text
 include/cute/tensor.hpp
 ```
 
-它就会把那个目录当成 `CUTLASS_ROOT`。
-
-在这台机器上，实际检测到的是：
+如果这个目录还没初始化，应该先在仓库根目录执行：
 
 ```text
-/home/ai/workspace/Cute-Learning/../LLMQRT/runtime_refact/3rdparty/cutlass
+git submodule update --init --recursive flashdecoding/src/cutlass
 ```
 
-也就是说，`Cute-Learning` 目前是在复用 `LLMQRT` 里的 CUTLASS 头文件。
+也就是说，`Cute-Learning` 现在不再依赖 `LLMQRT` 或其他仓库里的 CUTLASS。
 
 ## 本机环境检查结果
 
@@ -106,13 +101,13 @@ make info
 
 - `DETECTED_GPU_ARCH=sm_120`
 - `ARCH_FLAGS=-arch=sm_120`
-- `CUTLASS_ROOT=/home/ai/workspace/Cute-Learning/../LLMQRT/runtime_refact/3rdparty/cutlass`
+- `CUTLASS_ROOT=/home/ai/workspace/Cute-Learning/flashdecoding/src/cutlass`
 
 这说明：
 
 1. GPU 架构自动识别是正常的。
 2. 编译架构参数已经自动变成了 `sm_120`。
-3. CUTLASS 头文件也已经被自动找到。
+3. 现在默认只会使用仓库内的 CUTLASS。
 
 ## Step 3: 编译一个最小 GEMM 示例
 
@@ -123,6 +118,32 @@ make build
 ```
 
 本次已经实测通过，说明 `Cute-Learning` 当前可以直接编译 CuTe GEMM 示例。
+
+## 本次依赖修复记录
+
+这次做了两类修复：
+
+1. `common.mk`
+   不再回退到：
+   - `../LLMQRT/runtime_refact/3rdparty/cutlass`
+   - `../LLMQRT_bak/runtime_refact/3rdparty/cutlass`
+
+   而是统一固定到：
+
+   - `flashdecoding/src/cutlass`
+
+2. `sm90_decode/CMakeLists.txt`
+   不再依赖它自己目录下那个空的 `src/cutlass`，
+   而是统一引用 `../flashdecoding/src/cutlass`。
+
+3. `flashdecoding/CMakeLists.txt`
+   继续使用仓库内 `src/cutlass`，但现在会在 submodule 缺失时直接报出明确提示。
+
+另外，本次已经实际初始化了仓库内的 CUTLASS submodule：
+
+- `flashdecoding/src/cutlass`
+
+所以现在 `my_gemm`、`gemm/gemm_v1` 这类依赖 `common.mk` 的目录，都会优先走仓库内 CUTLASS。
 
 ## Step 4: 运行验证
 

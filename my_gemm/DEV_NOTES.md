@@ -119,6 +119,29 @@ long4 / ulong4 / double4 is deprecated
 2. 当前 kernel 是能跑的。
 3. `Max Error = 0.125` 不一定说明 kernel 错了，更可能是比较口径还没对齐。
 
+### 5. CUTLASS 依赖来源已经收口
+
+这次还顺手修复了构建依赖来源。
+
+之前 `Cute-Learning/common.mk` 会优先回退到：
+
+- `../LLMQRT/runtime_refact/3rdparty/cutlass`
+- `../LLMQRT_bak/runtime_refact/3rdparty/cutlass`
+
+这会导致 `my_gemm` 虽然在 `Cute-Learning` 里开发，但实际却在吃别的仓库里的 CUTLASS。
+
+现在已经改成：
+
+- 统一只依赖 `flashdecoding/src/cutlass`
+
+并且本地已经初始化过这个 submodule。
+
+这意味着后续 `make info` 里看到的 `CUTLASS_ROOT` 应该是：
+
+```text
+/home/ai/workspace/Cute-Learning/flashdecoding/src/cutlass
+```
+
 当前 kernel 用的是：
 
 ```text
@@ -166,3 +189,123 @@ make run
 ```bash
 ./gemm
 ```
+
+## 官方教程手写练习文件
+
+这次额外新建了一个纯练习文件：
+
+- `tutorial_gemm_scratch.cu`
+
+它的用途不是直接提供实现，而是给你留一个干净入口，按 NVIDIA 官方 CuTe GEMM 教程自己一步一步手写。
+
+当前这个文件里只保留了用途说明，没有放任何 kernel 实现。
+
+如果你后面想单独编译它，不需要先改 `Makefile`，可以直接临时覆盖变量：
+
+```bash
+cd /home/ai/workspace/Cute-Learning/my_gemm
+make build SRC=tutorial_gemm_scratch.cu TARGET=tutorial_gemm_scratch
+```
+
+如果你写完后想运行：
+
+```bash
+cd /home/ai/workspace/Cute-Learning/my_gemm
+make run SRC=tutorial_gemm_scratch.cu TARGET=tutorial_gemm_scratch
+```
+
+## Nsight Systems 采样入口
+
+这次给 `Makefile` 增加了一个 `nsys` target，用来生成 Nsight Systems 报告。
+
+注意生成的文件后缀不是 `.nsy`，而是：
+
+```text
+.nsys-rep
+```
+
+当前 `Makefile` 里的默认设置是：
+
+- 输出目录：`nsys_reports/`
+- 输出前缀：`nsys_reports/my_gemm`
+- trace 类型：`cuda,nvtx,osrt`
+
+所以跑完后，主要报告文件会是：
+
+```text
+nsys_reports/my_gemm.nsys-rep
+```
+
+默认命令：
+
+```bash
+cd /home/ai/workspace/Cute-Learning/my_gemm
+make nsys
+```
+
+如果你想换输出文件名，可以这样：
+
+```bash
+cd /home/ai/workspace/Cute-Learning/my_gemm
+make nsys NSYS_OUT=nsys_reports/my_gemm_v1
+```
+
+如果你想清理这些 profiling 产物：
+
+```bash
+cd /home/ai/workspace/Cute-Learning/my_gemm
+make nsys-clean
+```
+
+## 这次关于 nsys 的检查结论
+
+本机已经有可用的 `nsys`：
+
+- 路径：`/usr/local/cuda-13.1/bin/nsys`
+- 版本：`2025.5.2.266-255236693005v0`
+
+所以从工具 availability 来看，你现在可以直接尝试跑 profiling。
+
+## 2026-04-19 调试记录
+
+今天继续在老的 baseline 上做了 correctness 观察，当前运行输出如下：
+
+```text
+algo = my_first_cute_gemm
+Mismatch at index 0: GPU = 62.812500, CPU = 62.781250, Diff = 0.031250
+Mismatch at index 1: GPU = 68.187500, CPU = 68.250000, Diff = 0.062500
+Mismatch at index 235: GPU = 67.875000, CPU = 67.750000, Diff = 0.125000
+Correctness: M=256 N=256 K=256 Max Error = 0.125000
+Performance: M=2048 N=2048 K=2048 Time = 0.001734 s, GFLOPS = 9225.78
+```
+
+这次输出说明了几件事：
+
+1. 当前比较逻辑确实是逐元素比较 `h_out` 和 `h_ref` 的绝对误差。
+2. 当前打印出来的是“部分 mismatch 样本”，不是把所有不一致元素都打出来。
+3. 当前看到的最大误差点出现在 `index = 235`，对应 `Diff = 0.125000`。
+4. 性能结果基本稳定在 `9.2 TFLOPS` 左右，说明 baseline 的运行状态是稳定的。
+
+结合当前代码，比较链路是：
+
+1. `cpu_f16_gemm_tn(h_a, h_b, h_ref, m, n, k);`
+   先在 CPU 上算参考答案，结果写到 `h_ref`
+2. `launch_my_first_gemm(d_a, d_b, d_c, m, n, k);`
+   再在 GPU 上跑 CuTe kernel，结果写到 `d_c`
+3. `cudaMemcpy(h_out, d_c, size_c, cudaMemcpyDeviceToHost);`
+   把 GPU 结果拷回 `h_out`
+4. `fabs(float(h_out[i]) - float(h_ref[i]))`
+   做逐元素绝对误差比较，并更新 `max_error`
+
+当前误差仍然更像“精度口径不一致”，而不是明显的功能性错误，主要原因还是：
+
+- GPU 侧 MMA 路径是 `F16` 输入、`F16` 累加、`F16` 输出
+- CPU 参考实现是 `float` 累加、最后再 cast 回 `half`
+
+所以现在这份 baseline 更适合用来理解：
+
+- CuTe 的 Tensor / tile / partition 语法
+- kernel 的执行链路
+- baseline 的正确性与性能趋势
+
+而不适合直接把 `0.125` 当成“已经算错”的结论。

@@ -48,27 +48,41 @@ __global__ void my_first_gemm_kernel(const Element* a_ptr,
   // B: 这里按照 (N, K) 来看，和下面 TN 的 MMA 配置保持一致。
   // C: (M, N)
   Tensor A = make_tensor(make_gmem_ptr(a_ptr), make_shape(m, k), make_stride(k, Int<1>{}));
+  //   A 形状 M*K row-major ，索引方式 A(row, col) = A[row * k + col * 1]  
+  // 第一维步长 k：运行时才知道 ，第二维步长 1：编译期固定就是 1 写法： Int<1>{}
   Tensor B = make_tensor(make_gmem_ptr(b_ptr), make_shape(n, k), make_stride(k, Int<1>{}));
+  // B 形状 N*K row-major （按转置视角），索引方式 B(row, col) = B[row * k + col * 1]
   Tensor C = make_tensor(make_gmem_ptr(c_ptr), make_shape(m, n), make_stride(n, Int<1>{}));
+  // C 形状 M*N row-major，索引方式 C(row, col) = C[row * n + col * 1]   C(i, j) -> c_ptr[i * n + j *1]
 
-  // 2. 每个 CTA 只负责 C 的一个 tile，
+
+  // 2. 每个 CTA 只负责 C 的一个   
   // 同时取出本 CTA 对应的 A / B tile。
   Tensor gA = local_tile(A, make_tile(Int<BM>{}, Int<BK>{}), make_coord(blockIdx.y, _));
   Tensor gB = local_tile(B, make_tile(Int<BN>{}, Int<BK>{}), make_coord(blockIdx.x, _));
   Tensor gC = local_tile(C, make_tile(Int<BM>{}, Int<BN>{}), make_coord(blockIdx.y, blockIdx.x));
 
-  TiledMMA tiled_mma;
+  TiledMMA tiled_mma; 
+  //创建一个 TiledMMA 对象，后续所有切分和计算都基于它来做。这个对象本身不占用资源，里面的配置参数也都是编译期常量。
   auto thr_mma = tiled_mma.get_slice(threadIdx.x);
+  //从整个 tiled_mma 里，取出 当前线程 threadIdx.x 对应的那一份视角。
+
+  //get_slice(threadIdx.x) 之后，再通过 partition_A/B/C 把 A/B/C 的线程分区应用到对应 Tensor 上；
+  // 这些结果 Tensor 的第一维 MMA 表示一条 MMA 指令一次会消费的元素集合。
 
   // 3. 把 CTA tile 再切给每个线程。
   // tAgA / tBgB / tCgC 描述的是“这个线程该处理哪些元素”。
+  // tAgA  thread A global A
   auto tAgA = thr_mma.partition_A(gA);
+    // 当前线程该拿 A 的哪一小份
   auto tBgB = thr_mma.partition_B(gB);
   auto tCgC = thr_mma.partition_C(gC);
 
   // 4. 为本线程分配寄存器片段。
   // tArA / tBrB 存输入碎片，tCrC 存累加结果。
+  // tArA  thread A register A
   auto tArA = thr_mma.partition_fragment_A(gA(_, _, 0));
+  //make_fragment_C(...)：给当前线程分配对应的寄存器累加器 fragment
   auto tBrB = thr_mma.partition_fragment_B(gB(_, _, 0));
   auto tCrC = thr_mma.partition_fragment_C(gC(_, _));
 
@@ -83,6 +97,7 @@ __global__ void my_first_gemm_kernel(const Element* a_ptr,
     // 这是最容易读懂和验证的 baseline。
     cute::copy(tAgA(_, _, _, tile_k), tArA);
     cute::copy(tBgB(_, _, _, tile_k), tBrB);
+    //---------------------------------真正的gemm计算------------------------------------------------------
     cute::gemm(tiled_mma, tCrC, tArA, tBrB, tCrC);
   }
 
@@ -150,6 +165,7 @@ float run_correctness_check(int m, int n, int k) {
   }
 
   cpu_f16_gemm_tn(h_a, h_b, h_ref, m, n, k);
+  // h_ref 现在存着 CPU 算出来的结果，用来和 GPU 输出做对比。
 
   CHECK_CUDA(cudaMemcpy(d_a, h_a, size_a, cudaMemcpyHostToDevice));
   CHECK_CUDA(cudaMemcpy(d_b, h_b, size_b, cudaMemcpyHostToDevice));
@@ -157,11 +173,14 @@ float run_correctness_check(int m, int n, int k) {
   launch_my_first_gemm(d_a, d_b, d_c, m, n, k);
   CHECK_CUDA(cudaDeviceSynchronize());
   CHECK_CUDA(cudaMemcpy(h_out, d_c, size_c, cudaMemcpyDeviceToHost));
+  // h_out 现在存着 GPU 算出来的结果。
 
   float max_error = 0.0f;
   for (int i = 0; i < m * n; ++i) {
     float diff = std::fabs(static_cast<float>(h_out[i]) - static_cast<float>(h_ref[i]));
+    // 这里简单用绝对误差来衡量结果正确性，后续如果需要更细致的分析，可以改成相对误差，或者输出误差分布等。
     if (diff > max_error) {
+      printf("Mismatch at index %d: GPU = %f, CPU = %f, Diff = %f\n", i, static_cast<float>(h_out[i]), static_cast<float>(h_ref[i]), diff);
       max_error = diff;
     }
   }

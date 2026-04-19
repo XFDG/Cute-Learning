@@ -13,22 +13,15 @@ endif
 GPU_ARCH ?= $(DETECTED_GPU_ARCH)
 ARCH_FLAGS ?= -arch=sm_$(GPU_ARCH)
 
-CUTLASS_ROOT ?=
-CUTLASS_CANDIDATES := \
-	$(REPO_ROOT)/../LLMQRT/runtime_refact/3rdparty/cutlass \
-	$(REPO_ROOT)/../LLMQRT_bak/runtime_refact/3rdparty/cutlass \
-	$(REPO_ROOT)/flashdecoding/src/cutlass \
-	$(REPO_ROOT)/sm90_decode/src/cutlass
-
-ifeq ($(strip $(CUTLASS_ROOT)),)
-CUTLASS_ROOT := $(firstword $(foreach d,$(CUTLASS_CANDIDATES),$(if $(wildcard $(d)/include/cute/tensor.hpp),$(d),)))
-endif
+# Cute-Learning 统一只依赖仓库内这份 CUTLASS。
+# 如果缺失，优先初始化 submodule，而不是回退到其他仓库里的 cutlass。
+CUTLASS_ROOT := $(REPO_ROOT)/flashdecoding/src/cutlass
 
 NEEDS_CUTLASS ?= 0
 INCLUDE_FLAGS ?=
 ifeq ($(NEEDS_CUTLASS),1)
-ifeq ($(strip $(CUTLASS_ROOT)),)
-$(error Could not locate CUTLASS. Set CUTLASS_ROOT=/path/to/cutlass before running make)
+ifeq ($(wildcard $(CUTLASS_ROOT)/include/cute/tensor.hpp),)
+$(error Could not locate repo-local CUTLASS at $(CUTLASS_ROOT). Run 'git submodule update --init --recursive flashdecoding/src/cutlass' in the Cute-Learning repository)
 endif
 INCLUDE_FLAGS += -I$(CUTLASS_ROOT)/include
 ifneq ($(wildcard $(CUTLASS_ROOT)/tools/util/include),)
